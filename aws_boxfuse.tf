@@ -30,6 +30,15 @@ variable "deploy_region" {
   default = "us-east-2"
 } 
 
+# Define varibale for EC2 ubuntu18.04 image for us-east-2 aws region
+variable "image_id" {
+  default = "ami-0dd9f0e7df0f0a138"
+}
+
+# Define VPC in a variable
+variable "my_vpc_id" {
+  default = "vpc-8d8f30e6"
+}
 
 
 
@@ -41,22 +50,13 @@ provider "aws" {
 }
 
 
-# Create a virtual private cloud (VPC)
-resource "aws_vpc" "my_vpc" {
-  cidr_block = "172.16.10.0/24"
-}
 
-# Create a subnet for deploy
-resource "aws_subnet" "boxfuse_subnet" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "172.16.10.0/29"
-}
 
 # Create security rules for deploy
 resource "aws_security_group" "allow_tomcat" {
   name        = "allow_tomcat"
   description = "Allow traffic for Tomcat"
-  vpc_id      = aws_vpc.my_vpc.id
+  vpc_id      = var.my_vpc_id
 
   ingress {
     description = "Incoming tcp at 8080 from everywhere"
@@ -80,39 +80,14 @@ resource "aws_security_group" "allow_tomcat" {
 }
 
 
-/*
-# Define varibale for EC2 ubuntu18.04 image for us-east-2 aws region
-variable "image_id" {
-  default = "ami-0dd9f0e7df0f0a138"
-}*/
-
-# Find ubuntu 18.04 image
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-18.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"] # Canonical
-}
-
 
 
 
 # Create buider instance
 resource "aws_instance" "build_instance" {
-  ami = data.aws_ami.ubuntu.id
+  ami = var.image_id
   instance_type = var.inst_type
-  subnet_id = aws_subnet.boxfuse_subnet.id
   vpc_security_group_ids = [aws_security_group.allow_tomcat.id]
-    
   user_data = <<EOF
 #!/bin/bash
 sudo apt update && sudo apt install -y openjdk-8-jdk maven git awscli
@@ -128,10 +103,9 @@ EOF
 
 # Create production instance
 resource "aws_instance" "prod_instance" {
-  ami = data.aws_ami.ubuntu.id
+  ami = var.image_id
   instance_type = var.inst_type
   vpc_security_group_ids = [aws_security_group.allow_tomcat.id]
-  subnet_id = aws_subnet.boxfuse_subnet.id
   user_data = <<EOF
 #!/bin/bash
 sudo apt update && sudo apt install -y openjdk-8-jdk tomcat8 awscli
