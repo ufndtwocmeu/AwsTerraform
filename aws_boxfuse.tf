@@ -1,8 +1,7 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 3.0"
+      version = "3.22.0"
     }
   }
 }
@@ -16,11 +15,6 @@ variable "my_secret_key" {
   default = "enter-your-secret-key-here!!!!!!!!!!!!"
 } 
 
-# Define aws region in a variable
-variable "my_region" {
-  default = "us-east-2"
-} 
-
 # Define my bucket name in a variable
 variable "my_bucket" {
   default = "s3://mybacket1.ufndtwocmeu.ru"
@@ -31,14 +25,19 @@ variable "inst_type" {
   default = "t2.micro"
 } 
 
+# Define region in a variable
+variable "deploy_region" {
+  default = "us-east-2"
+} 
+
 
 
 
 # Configure the AWS Provider
 provider "aws" {
-  region = "${var.my_region}"
-  access_key = "${var.my_access_key}"
-  secret_key = "${var.my_secret_key}"
+  region = var.deploy_region
+  access_key = var.my_access_key
+  secret_key = var.my_secret_key
 }
 
 
@@ -110,8 +109,8 @@ data "aws_ami" "ubuntu" {
 # Create buider instance
 resource "aws_instance" "build_instance" {
   ami = data.aws_ami.ubuntu.id
-  instance_type = "${var.inst_type}"
-  subnet_id = aws_subnet.boxfuse_subnet.subnet_id
+  instance_type = var.inst_type
+  subnet_id = aws_subnet.boxfuse_subnet.id
   vpc_security_group_ids = [aws_security_group.allow_tomcat.id]
     
   user_data = <<EOF
@@ -121,7 +120,7 @@ mkdir /data && cd /data && git clone https://github.com/boxfuse/boxfuse-sample-j
 cd /data/boxfuse-sample-java-war-hello && mvn package
 export AWS_ACCESS_KEY_ID=${var.my_access_key}
 export AWS_SECRET_ACCESS_KEY=${var.my_secret_key}
-export AWS_DEFAULT_REGION=${var.my_region}
+export AWS_DEFAULT_REGION=${var.deploy_region}
 aws s3 cp /data/boxfuse-sample-java-war-hello/target/hello-1.0.war ${var.my_bucket}
 EOF
   
@@ -130,15 +129,15 @@ EOF
 # Create production instance
 resource "aws_instance" "prod_instance" {
   ami = data.aws_ami.ubuntu.id
-  instance_type = "${var.inst_type}"
+  instance_type = var.inst_type
   vpc_security_group_ids = [aws_security_group.allow_tomcat.id]
-  subnet_id = aws_subnet.boxfuse_subnet.subnet_id
+  subnet_id = aws_subnet.boxfuse_subnet.id
   user_data = <<EOF
 #!/bin/bash
 sudo apt update && sudo apt install -y openjdk-8-jdk tomcat8 awscli
 export AWS_ACCESS_KEY_ID=${var.my_access_key}
 export AWS_SECRET_ACCESS_KEY=${var.my_secret_key}
-export AWS_DEFAULT_REGION=${var.my_region}
+export AWS_DEFAULT_REGION=${var.deploy_region}
 aws s3 cp ${var.my_bucket}/hello-1.0.war /var/lib/tomcat8/webapps/hello-1.0.war
 sudo systemctl restart tomcat8
 EOF
